@@ -1,0 +1,28 @@
+services:
+  hermes-gateway:
+    image: ${HERMES_IMAGE_NAME}
+    build:
+      context: ..
+      dockerfile: hermes-docker/Dockerfile
+      args:
+        HERMES_BASE_IMAGE: ${HERMES_BASE_IMAGE}
+    container_name: ${HERMES_CONTAINER_NAME}
+    working_dir: /workspace
+    env_file:
+      - ${HERMES_RUNTIME_ENV_FILE}
+    environment:
+      HERMES_HOME: /opt/data
+      HERMES_BOOTSTRAP_HOME: /workspace/hermes-docker/runtime/bootstrap
+    ports:
+      - "${HERMES_GATEWAY_PORT}:${HERMES_GATEWAY_PORT}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${HERMES_WORKSPACE_ROOT}:/workspace:rw
+      - hermes_state:/opt/data:rw
+    command:
+      - gateway
+      - run
+
+volumes:
+  hermes_state:
