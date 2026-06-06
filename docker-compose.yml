@@ -46,6 +46,7 @@ services:
       HERMES_AUTO_UPDATE: ${HERMES_AUTO_UPDATE:-true}
       HERMES_AUTO_UPDATE_ARGS: ${HERMES_AUTO_UPDATE_ARGS:---yes --gateway}
       HERMES_AUTO_UPDATE_REQUIRED: ${HERMES_AUTO_UPDATE_REQUIRED:-false}
+      HERMES_DASHBOARD_TUI: "1"
     ports:
       - "127.0.0.1:${HERMES_DASHBOARD_PORT}:9119"
     extra_hosts:
@@ -61,6 +62,7 @@ services:
       - "9119"
       - --no-open
       - --insecure
+      - --tui
 
 volumes:
   hermes_state:

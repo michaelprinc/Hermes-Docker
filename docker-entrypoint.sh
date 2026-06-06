@@ -28,7 +28,7 @@ run_hermes_update() {
   cd /opt/hermes
   export VIRTUAL_ENV=/opt/hermes/.venv
   export PATH="$VIRTUAL_ENV/bin:$PATH"
-  /opt/hermes/.venv/bin/hermes update $AUTO_UPDATE_ARGS
+  /opt/hermes/hermes update $AUTO_UPDATE_ARGS
 }
 
 mkdir -p "$TARGET_HOME"

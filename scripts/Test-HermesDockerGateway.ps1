@@ -27,7 +27,7 @@ $repoRoot = Resolve-Path (Join-Path $moduleRoot '..\..')
 try {
     $composePath = Join-Path $moduleRoot 'docker-compose.yml'
     $composeEnvPath = Join-Path $moduleRoot '.env'
-    $hermesCliPath = '/opt/hermes/.venv/bin/hermes'
+    $hermesCliCommand = 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes'
 
     if (-not (Test-Path -LiteralPath $composeEnvPath)) {
         throw "Docker env file was not found at '$composeEnvPath'. Copy .env.example to .env first."
@@ -45,7 +45,7 @@ try {
             throw 'Hermes gateway container is not running.'
         }
 
-        & docker @baseArgs 'exec' '-T' 'hermes-gateway' $hermesCliPath 'version' | Out-Null
+        & docker @baseArgs 'exec' '-T' 'hermes-gateway' 'sh' '-lc' "$hermesCliCommand version" | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw "hermes version failed with exit code $LASTEXITCODE"
         }

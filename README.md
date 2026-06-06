@@ -41,6 +41,112 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\hermes-docker\scripts\Star
 powershell -NoProfile -ExecutionPolicy Bypass -File .\hermes-docker\scripts\Test-HermesDockerGateway.ps1 -Verbose
 ```
 
+## Build, Run, And Reinstall
+
+Run these commands from `agent-platforms` in a PowerShell terminal. The compose
+file is designed to keep Hermes runtime state in the `hermes_state` Docker
+volume, so a normal rebuild/reinstall refreshes the image and containers
+without deleting sessions, config, skills, or credentials.
+
+### First Run
+
+1. Prepare the local environment file if it does not exist yet:
+
+```powershell
+Copy-Item .\hermes-docker\.env.example .\hermes-docker\.env
+```
+
+2. Generate the runtime bootstrap files:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\hermes-docker\scripts\Sync-HermesDockerConfig.ps1 -Verbose
+```
+
+3. Build the Hermes wrapper image:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml build hermes-gateway
+```
+
+4. Start the gateway container:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml up -d hermes-gateway
+```
+
+5. Start the optional dashboard with the browser Chat tab:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml --profile dashboard up -d hermes-dashboard
+```
+
+6. Open the dashboard:
+
+```text
+http://127.0.0.1:9119
+```
+
+With Discord disabled, `hermes-gateway` may exit after logging that no
+messaging platforms are enabled. The dashboard service is the container that
+serves the browser UI and embedded Chat tab.
+
+### Reinstall With docker compose build
+
+Use this when `Dockerfile`, `docker-entrypoint.sh`, `docker-compose.yml`, the
+base image, or Hermes package state needs to be refreshed.
+
+1. Stop the running Hermes containers:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml --profile dashboard stop hermes-gateway hermes-dashboard
+```
+
+2. Rebuild the local wrapper image:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml build --pull hermes-gateway
+```
+
+For a deeper rebuild that ignores Docker layer cache:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml build --pull --no-cache hermes-gateway
+```
+
+3. Recreate the containers from the rebuilt image:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml up -d --force-recreate hermes-gateway
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml --profile dashboard up -d --force-recreate hermes-dashboard
+```
+
+4. Verify container state and port bindings:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml --profile dashboard ps -a
+```
+
+The dashboard `PORTS` column should show `127.0.0.1:9119->9119/tcp`.
+
+5. Verify that the dashboard exposes the Chat tab:
+
+```powershell
+$response = Invoke-WebRequest -Uri "http://127.0.0.1:9119/" -UseBasicParsing
+if ($response.Content -notmatch 'window\.__HERMES_DASHBOARD_EMBEDDED_CHAT__=true') {
+    throw "Hermes dashboard Chat tab is not enabled."
+}
+```
+
+6. Check recent logs if startup fails:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml logs --tail 100 hermes-gateway
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml logs --tail 100 hermes-dashboard
+```
+
+Do not use `docker compose down -v` for a normal reinstall. The `-v` switch
+deletes the `hermes_state` volume and removes persisted Hermes runtime data.
+
 ## Startup Auto-Update
 
 The wrapper entrypoint runs `hermes update --yes --gateway` before each
@@ -106,10 +212,10 @@ Available interfaces in this Docker profile:
 
 | Interface | How to use it | Notes |
 |-----------|---------------|-------|
-| CLI chat | `docker compose exec hermes-gateway /opt/hermes/.venv/bin/hermes chat` | Best for manual use from the VS Code terminal. |
+| CLI chat | `docker compose exec hermes-gateway sh -lc 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes chat'` | Best for manual use from the VS Code terminal. |
 | One-shot CLI | `hermes chat -q "..."` or `hermes -z "..."` inside the container | Best for scripts and quick checks. |
-| ACP server | `docker compose exec hermes-gateway /opt/hermes/.venv/bin/hermes acp` | Editor integration protocol for VS Code, Zed, and JetBrains. `hermes acp --check` passes in this image. |
-| Web dashboard | `docker compose --profile dashboard up -d hermes-dashboard` | Browser UI on `http://127.0.0.1:9119`, published only to localhost on the Windows host. |
+| ACP server | `docker compose exec hermes-gateway sh -lc 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes acp'` | Editor integration protocol for VS Code, Zed, and JetBrains. Requires the ACP extra dependencies in the image. |
+| Web dashboard | `docker compose --profile dashboard up -d hermes-dashboard` | Browser UI with the Chat tab on `http://127.0.0.1:9119`, published only to localhost on the Windows host. |
 | MCP server | `hermes mcp serve` inside the container | Exposes Hermes conversations to MCP clients; configure the client to launch it through Docker. |
 | Messaging gateway | Default container command: `gateway run` | Supports Telegram, Discord, WhatsApp, Slack/Weixin-style integrations when configured. Disabled by default here. |
 
@@ -136,7 +242,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\hermes-docker\scripts\Test
    model endpoint:
 
 ```powershell
-docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway /opt/hermes/.venv/bin/hermes config
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway sh -lc 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes config'
 ```
 
 The `Model` section must include:
@@ -151,26 +257,26 @@ Run a one-shot prompt through Hermes to confirm that the agent itself can use
 the local model:
 
 ```powershell
-docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway /opt/hermes/.venv/bin/hermes -z "Reply with exactly LOCAL_OK" --provider custom -m qwen36_35b_a3b_mtp_iq3xxs_rx6800_cache_mtp_256k
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway sh -lc 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes -z "Reply with exactly LOCAL_OK" --provider custom -m qwen36_35b_a3b_mtp_iq3xxs_rx6800_cache_mtp_256k'
 ```
 
 6. Inspect logs or run the bundled CLI:
 
 ```powershell
 docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml logs -f hermes-gateway
-docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec hermes-gateway /opt/hermes/.venv/bin/hermes version
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec hermes-gateway sh -lc 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes version'
 ```
 
 7. Start an interactive chat from the VS Code terminal:
 
 ```powershell
-docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec hermes-gateway /opt/hermes/.venv/bin/hermes chat
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec hermes-gateway sh -lc 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes chat'
 ```
 
 For a single prompt:
 
 ```powershell
-docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway /opt/hermes/.venv/bin/hermes chat -q "Summarize the current repository architecture."
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway sh -lc 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes chat -q "Summarize the current repository architecture."'
 ```
 
 ### VS Code Editor Integration
@@ -179,14 +285,14 @@ Hermes exposes ACP for editor integration. The Docker image already reports
 `Hermes ACP check OK` with:
 
 ```powershell
-docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway /opt/hermes/.venv/bin/hermes acp --check
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway sh -lc 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes acp --check'
 ```
 
 For a VS Code ACP-capable extension, configure the agent command as a Docker
 Compose exec command that launches ACP:
 
 ```powershell
-docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway /opt/hermes/.venv/bin/hermes acp --accept-hooks
+docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml exec -T hermes-gateway sh -lc 'export VIRTUAL_ENV=/opt/hermes/.venv; export PATH="$VIRTUAL_ENV/bin:$PATH"; /opt/hermes/hermes acp --accept-hooks'
 ```
 
 Use `-T` for protocol clients because ACP communicates over stdio and should
@@ -207,6 +313,9 @@ Hermes still has to bind to `0.0.0.0` inside the container so Docker can forward
 traffic from the host. The service therefore passes `--insecure`, but the
 external exposure is constrained by Docker to the local PC only. Do not change
 the port mapping to `9119:9119`.
+
+The dashboard service also passes `--tui` and sets `HERMES_DASHBOARD_TUI=1`.
+Hermes uses that flag to expose the embedded browser Chat tab.
 
 Start the localhost-only dashboard:
 
