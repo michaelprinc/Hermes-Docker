@@ -20,16 +20,16 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('Configured', 'Codex', 'Local')]
-    [string]$ModelMode = $(if ([string]::IsNullOrWhiteSpace($env:HERMES_AGENT_MODEL_MODE)) { 'Configured' } else { $env:HERMES_AGENT_MODEL_MODE }),
+    [string]$ModelMode = $(if ([string]::IsNullOrWhiteSpace($env:HERMES_AGENT_MODEL_MODE)) { 'Local' } else { $env:HERMES_AGENT_MODEL_MODE }),
 
     [Parameter(Mandatory = $false)]
-    [string]$LocalModelBaseUrl = $(if ([string]::IsNullOrWhiteSpace($env:HERMES_LOCAL_MODEL_BASE_URL)) { 'http://host.docker.internal:8014/v1' } else { $env:HERMES_LOCAL_MODEL_BASE_URL }),
+    [string]$LocalModelBaseUrl = $(if ([string]::IsNullOrWhiteSpace($env:HERMES_LOCAL_MODEL_BASE_URL)) { 'http://host.docker.internal:8068/v1' } else { $env:HERMES_LOCAL_MODEL_BASE_URL }),
 
     [Parameter(Mandatory = $false)]
-    [string]$LocalModelId = $(if ([string]::IsNullOrWhiteSpace($env:HERMES_LOCAL_MODEL_ID)) { 'Gemma-4-26B-A4B-it-Q4_K_S' } else { $env:HERMES_LOCAL_MODEL_ID }),
+    [string]$LocalModelId = $(if ([string]::IsNullOrWhiteSpace($env:HERMES_LOCAL_MODEL_ID)) { 'qwen36_35b_a3b_mtp_iq3xxs_rx6800_cache_mtp_256k' } else { $env:HERMES_LOCAL_MODEL_ID }),
 
     [Parameter(Mandatory = $false)]
-    [string]$LocalModelApiKey = $(if ([string]::IsNullOrWhiteSpace($env:HERMES_LOCAL_MODEL_API_KEY)) { 'local-gemma' } else { $env:HERMES_LOCAL_MODEL_API_KEY }),
+    [string]$LocalModelApiKey = $(if ([string]::IsNullOrWhiteSpace($env:HERMES_LOCAL_MODEL_API_KEY)) { 'local-model' } else { $env:HERMES_LOCAL_MODEL_API_KEY }),
 
     [Parameter(Mandatory = $false)]
     [string]$CodexModel = $(if ([string]::IsNullOrWhiteSpace($env:HERMES_CODEX_MODEL)) { 'gpt-5.4' } else { $env:HERMES_CODEX_MODEL })
@@ -39,7 +39,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $moduleRoot = Split-Path -Parent $PSScriptRoot
-$repoRoot = Resolve-Path (Join-Path $moduleRoot '..')
+$repoRoot = Resolve-Path (Join-Path $moduleRoot '..\..')
 
 . (Join-Path $repoRoot '.github\scripts\Common-Functions.ps1')
 

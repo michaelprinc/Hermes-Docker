@@ -20,7 +20,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $moduleRoot = Split-Path -Parent $PSScriptRoot
-$repoRoot = Resolve-Path (Join-Path $moduleRoot '..')
+$repoRoot = Resolve-Path (Join-Path $moduleRoot '..\..')
 
 . (Join-Path $repoRoot '.github\scripts\Common-Functions.ps1')
 
