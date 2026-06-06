@@ -160,11 +160,16 @@ Relevant `.env` switches:
 HERMES_AUTO_UPDATE=true
 HERMES_AUTO_UPDATE_ARGS=--yes --gateway
 HERMES_AUTO_UPDATE_REQUIRED=false
+UV_LINK_MODE=copy
 ```
 
 Set `HERMES_AUTO_UPDATE=false` to skip the startup update. Set
 `HERMES_AUTO_UPDATE_REQUIRED=true` when a failed update should stop the
 container instead of continuing with the installed version.
+
+The wrapper normalizes Hermes package ownership before the update and runs the
+updater as the `hermes` user, so files under `/opt/hermes/.venv` remain writable
+across image rebuilds and package upgrades.
 
 ## Model Modes
 

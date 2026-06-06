@@ -10,6 +10,11 @@ AUTO_UPDATE="${HERMES_AUTO_UPDATE:-true}"
 AUTO_UPDATE_ARGS="${HERMES_AUTO_UPDATE_ARGS:---yes --gateway}"
 AUTO_UPDATE_REQUIRED="${HERMES_AUTO_UPDATE_REQUIRED:-false}"
 
+ensure_hermes_update_permissions() {
+  chown hermes:hermes /opt/hermes /opt/hermes/package.json /opt/hermes/README.md 2>/dev/null || true
+  chown -R hermes:hermes /opt/hermes/.venv /opt/hermes/hermes_agent.egg-info /opt/hermes/hermes_cli/web_dist 2>/dev/null || true
+}
+
 copy_if_needed() {
   source_path="$1"
   target_path="$2"
@@ -28,7 +33,8 @@ run_hermes_update() {
   cd /opt/hermes
   export VIRTUAL_ENV=/opt/hermes/.venv
   export PATH="$VIRTUAL_ENV/bin:$PATH"
-  /opt/hermes/hermes update $AUTO_UPDATE_ARGS
+  export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
+  gosu hermes /opt/hermes/hermes update $AUTO_UPDATE_ARGS
 }
 
 mkdir -p "$TARGET_HOME"
@@ -49,6 +55,7 @@ case "$AUTO_UPDATE" in
   true|TRUE|1|yes|YES)
     if [ "${1:-}" != "update" ]; then
       echo "Updating Hermes Agent before container start..."
+      ensure_hermes_update_permissions
       if ! run_hermes_update; then
         if [ "$AUTO_UPDATE_REQUIRED" = "true" ]; then
           echo "Hermes auto-update failed and HERMES_AUTO_UPDATE_REQUIRED=true." >&2

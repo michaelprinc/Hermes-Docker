@@ -16,6 +16,7 @@ services:
       HERMES_AUTO_UPDATE: ${HERMES_AUTO_UPDATE:-true}
       HERMES_AUTO_UPDATE_ARGS: ${HERMES_AUTO_UPDATE_ARGS:---yes --gateway}
       HERMES_AUTO_UPDATE_REQUIRED: ${HERMES_AUTO_UPDATE_REQUIRED:-false}
+      UV_LINK_MODE: ${UV_LINK_MODE:-copy}
     ports:
       - "127.0.0.1:${HERMES_GATEWAY_PORT}:${HERMES_GATEWAY_PORT}"
     extra_hosts:
@@ -47,6 +48,7 @@ services:
       HERMES_AUTO_UPDATE_ARGS: ${HERMES_AUTO_UPDATE_ARGS:---yes --gateway}
       HERMES_AUTO_UPDATE_REQUIRED: ${HERMES_AUTO_UPDATE_REQUIRED:-false}
       HERMES_DASHBOARD_TUI: "1"
+      UV_LINK_MODE: ${UV_LINK_MODE:-copy}
     ports:
       - "127.0.0.1:${HERMES_DASHBOARD_PORT}:9119"
     extra_hosts:
