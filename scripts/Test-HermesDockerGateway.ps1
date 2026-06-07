@@ -24,6 +24,33 @@ $repoRoot = Resolve-Path (Join-Path $moduleRoot '..\..')
 
 . (Join-Path $repoRoot '.github\scripts\Common-Functions.ps1')
 
+function Read-HermesDockerEnvFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $values = @{}
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $values
+    }
+
+    foreach ($line in Get-Content -LiteralPath $Path -Encoding UTF8) {
+        if ($line -match '^\s*$' -or $line -match '^\s*#') {
+            continue
+        }
+
+        $parts = $line -split '=', 2
+        if ($parts.Count -ne 2) {
+            continue
+        }
+
+        $values[$parts[0].Trim()] = $parts[1].Trim()
+    }
+
+    return $values
+}
+
 try {
     $composePath = Join-Path $moduleRoot 'docker-compose.yml'
     $composeEnvPath = Join-Path $moduleRoot '.env'
@@ -92,6 +119,7 @@ raise SystemExit(0 if ok else 1)
         $logText = ($logOutput -join [Environment]::NewLine)
         $hasTraceback = $logText -match '(?i)traceback|fatal:|exception:'
         $hasDiscordConnectionSignal = $logText -match '(?i)discord.*(connected|logged in|gateway ready|starting provider)'
+        $dashboardChatFlagDetected = $false
 
         if ($hasTraceback) {
             throw 'Hermes runtime logs contain an exception or traceback.'
@@ -101,18 +129,31 @@ raise SystemExit(0 if ok else 1)
             throw 'Discord appears to be active in the Hermes runtime logs, but this MVP must keep it disabled.'
         }
 
+        if ($runningServices -contains 'hermes-dashboard') {
+            $composeEnvValues = Read-HermesDockerEnvFile -Path $composeEnvPath
+            $dashboardPort = if ($composeEnvValues.ContainsKey('HERMES_DASHBOARD_PORT')) { $composeEnvValues['HERMES_DASHBOARD_PORT'] } else { '9119' }
+            $dashboardResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$dashboardPort/" -UseBasicParsing
+            $dashboardChatFlagDetected = $dashboardResponse.Content -match 'window\.__HERMES_DASHBOARD_EMBEDDED_CHAT__=true'
+
+            if (-not $dashboardChatFlagDetected) {
+                throw 'Hermes dashboard Chat tab is not enabled.'
+            }
+        }
+
         Write-AuditLog -Action 'Hermes:DockerGatewayTest' -Result 'Success' -Details @{
             ComposePath = $composePath
             LogTail = $LogTail
             RunningServices = @($runningServices)
             TracebackDetected = $hasTraceback
             DiscordConnectionSignalDetected = $hasDiscordConnectionSignal
+            DashboardChatFlagDetected = $dashboardChatFlagDetected
         }
 
         [pscustomobject]@{
             RunningServices = $runningServices
             TracebackDetected = $hasTraceback
             DiscordConnectionSignalDetected = $hasDiscordConnectionSignal
+            DashboardChatFlagDetected = $dashboardChatFlagDetected
         }
     }
 } catch {

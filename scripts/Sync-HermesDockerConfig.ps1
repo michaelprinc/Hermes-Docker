@@ -71,6 +71,66 @@ function ConvertTo-HermesDockerBool {
     return 'false'
 }
 
+function Read-HermesDockerEnvFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $values = @{}
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $values
+    }
+
+    foreach ($line in Get-Content -LiteralPath $Path -Encoding UTF8) {
+        if ($line -match '^\s*$' -or $line -match '^\s*#') {
+            continue
+        }
+
+        $parts = $line -split '=', 2
+        if ($parts.Count -ne 2) {
+            continue
+        }
+
+        $values[$parts[0].Trim()] = $parts[1].Trim()
+    }
+
+    return $values
+}
+
+function Set-HermesDockerValueFromEnvFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Values,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$BoundParameterNames,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ParameterName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$EnvName,
+
+        [Parameter(Mandatory = $true)]
+        [ref]$Target,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$AsBoolean
+    )
+
+    if ($BoundParameterNames -contains $ParameterName -or -not $Values.ContainsKey($EnvName)) {
+        return
+    }
+
+    if ($AsBoolean) {
+        $Target.Value = [System.Convert]::ToBoolean($Values[$EnvName])
+        return
+    }
+
+    $Target.Value = $Values[$EnvName]
+}
+
 function Resolve-HermesDockerModelConfig {
     param(
         [Parameter(Mandatory = $true)]
@@ -210,6 +270,22 @@ try {
     $envPath = Join-Path $bootstrapDir '.env'
     $runtimeEnvPath = Join-Path $runtimeDir 'hermes.runtime.env'
     $templateEnvPath = Join-Path $moduleRoot 'config\runtime.template.env'
+    $composeEnvPath = Join-Path $moduleRoot '.env'
+
+    $composeEnvValues = Read-HermesDockerEnvFile -Path $composeEnvPath
+    $boundParameterNames = @($PSBoundParameters.Keys)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'ModelMode' -EnvName 'HERMES_AGENT_MODEL_MODE' -Target ([ref]$ModelMode)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'ConfiguredModelProvider' -EnvName 'HERMES_MODEL_PROVIDER' -Target ([ref]$ConfiguredModelProvider)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'ConfiguredModelDefault' -EnvName 'HERMES_MODEL_DEFAULT' -Target ([ref]$ConfiguredModelDefault)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'ConfiguredModelBaseUrl' -EnvName 'HERMES_MODEL_BASE_URL' -Target ([ref]$ConfiguredModelBaseUrl)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'ConfiguredModelApiKey' -EnvName 'HERMES_MODEL_API_KEY' -Target ([ref]$ConfiguredModelApiKey)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'CodexModel' -EnvName 'HERMES_CODEX_MODEL' -Target ([ref]$CodexModel)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'LocalModelBaseUrl' -EnvName 'HERMES_LOCAL_MODEL_BASE_URL' -Target ([ref]$LocalModelBaseUrl)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'LocalModelId' -EnvName 'HERMES_LOCAL_MODEL_ID' -Target ([ref]$LocalModelId)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'LocalModelApiKey' -EnvName 'HERMES_LOCAL_MODEL_API_KEY' -Target ([ref]$LocalModelApiKey)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'DiscordEnabled' -EnvName 'HERMES_DISCORD_ENABLED' -Target ([ref]$DiscordEnabled) -AsBoolean
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'DiscordRequireMention' -EnvName 'HERMES_DISCORD_REQUIRE_MENTION' -Target ([ref]$DiscordRequireMention) -AsBoolean
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'DiscordAutoThread' -EnvName 'HERMES_DISCORD_AUTO_THREAD' -Target ([ref]$DiscordAutoThread) -AsBoolean
 
     foreach ($path in @($runtimeDir, $bootstrapDir)) {
         if (-not (Test-Path -LiteralPath $path)) {

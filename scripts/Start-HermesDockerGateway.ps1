@@ -43,6 +43,58 @@ $repoRoot = Resolve-Path (Join-Path $moduleRoot '..\..')
 
 . (Join-Path $repoRoot '.github\scripts\Common-Functions.ps1')
 
+function Read-HermesDockerEnvFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $values = @{}
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $values
+    }
+
+    foreach ($line in Get-Content -LiteralPath $Path -Encoding UTF8) {
+        if ($line -match '^\s*$' -or $line -match '^\s*#') {
+            continue
+        }
+
+        $parts = $line -split '=', 2
+        if ($parts.Count -ne 2) {
+            continue
+        }
+
+        $values[$parts[0].Trim()] = $parts[1].Trim()
+    }
+
+    return $values
+}
+
+function Set-HermesDockerValueFromEnvFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Values,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$BoundParameterNames,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ParameterName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$EnvName,
+
+        [Parameter(Mandatory = $true)]
+        [ref]$Target
+    )
+
+    if ($BoundParameterNames -contains $ParameterName -or -not $Values.ContainsKey($EnvName)) {
+        return
+    }
+
+    $Target.Value = $Values[$EnvName]
+}
+
 try {
     $syncScriptPath = Join-Path $PSScriptRoot 'Sync-HermesDockerConfig.ps1'
     $composePath = Join-Path $moduleRoot 'docker-compose.yml'
@@ -51,6 +103,14 @@ try {
     if (-not (Test-Path -LiteralPath $composeEnvPath)) {
         throw "Docker env file was not found at '$composeEnvPath'. Copy .env.example to .env first."
     }
+
+    $composeEnvValues = Read-HermesDockerEnvFile -Path $composeEnvPath
+    $boundParameterNames = @($PSBoundParameters.Keys)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'ModelMode' -EnvName 'HERMES_AGENT_MODEL_MODE' -Target ([ref]$ModelMode)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'LocalModelBaseUrl' -EnvName 'HERMES_LOCAL_MODEL_BASE_URL' -Target ([ref]$LocalModelBaseUrl)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'LocalModelId' -EnvName 'HERMES_LOCAL_MODEL_ID' -Target ([ref]$LocalModelId)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'LocalModelApiKey' -EnvName 'HERMES_LOCAL_MODEL_API_KEY' -Target ([ref]$LocalModelApiKey)
+    Set-HermesDockerValueFromEnvFile -Values $composeEnvValues -BoundParameterNames $boundParameterNames -ParameterName 'CodexModel' -EnvName 'HERMES_CODEX_MODEL' -Target ([ref]$CodexModel)
 
     if (-not $SkipSync) {
         $syncArgs = @{

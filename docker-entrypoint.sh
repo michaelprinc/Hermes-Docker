@@ -68,4 +68,12 @@ case "$AUTO_UPDATE" in
     ;;
 esac
 
+if [ -x /opt/hermes/docker/main-wrapper.sh ]; then
+  if [ "$(readlink /usr/bin/tini 2>/dev/null || true)" = "/init" ]; then
+    exec /usr/bin/tini /opt/hermes/docker/main-wrapper.sh "$@"
+  fi
+
+  exec /usr/bin/tini -g -- /opt/hermes/docker/main-wrapper.sh "$@"
+fi
+
 exec /usr/bin/tini -g -- /opt/hermes/docker/entrypoint.sh "$@"

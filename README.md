@@ -12,6 +12,9 @@ It is intentionally narrower than the upstream Hermes deployment docs:
 - generated Hermes home files live under `hermes-docker/runtime/bootstrap`
   and are copied into the persistent Docker volume on container startup
 
+The PowerShell scripts read `hermes-docker/.env` for default model and runtime
+settings. Explicit script parameters still win over `.env` values.
+
 ## Prerequisites
 
 - Docker Desktop with Compose support
@@ -86,9 +89,10 @@ docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose
 http://127.0.0.1:9119
 ```
 
-With Discord disabled, `hermes-gateway` may exit after logging that no
-messaging platforms are enabled. The dashboard service is the container that
-serves the browser UI and embedded Chat tab.
+With Discord disabled, `hermes-gateway` still remains running under the
+upstream Hermes supervision model and logs that no messaging platforms are
+enabled. The optional dashboard service serves the browser UI and embedded
+Chat tab.
 
 ### Reinstall With docker compose build
 
@@ -101,7 +105,13 @@ base image, or Hermes package state needs to be refreshed.
 docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml --profile dashboard stop hermes-gateway hermes-dashboard
 ```
 
-2. Rebuild the local wrapper image:
+2. Regenerate the runtime bootstrap files from `hermes-docker/.env`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\hermes-docker\scripts\Sync-HermesDockerConfig.ps1 -Verbose
+```
+
+3. Rebuild the local wrapper image:
 
 ```powershell
 docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml build --pull hermes-gateway
@@ -113,14 +123,29 @@ For a deeper rebuild that ignores Docker layer cache:
 docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml build --pull --no-cache hermes-gateway
 ```
 
-3. Recreate the containers from the rebuilt image:
+4. Recreate the gateway container from the rebuilt image:
 
 ```powershell
 docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml up -d --force-recreate hermes-gateway
+```
+
+5. Verify the gateway before starting the dashboard:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\hermes-docker\scripts\Test-HermesDockerGateway.ps1 -Verbose
+```
+
+6. Recreate the optional dashboard after the gateway is healthy:
+
+```powershell
 docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml --profile dashboard up -d --force-recreate hermes-dashboard
 ```
 
-4. Verify container state and port bindings:
+Starting the dashboard only after the gateway is stable avoids transient
+startup races while the shared `hermes_state` volume is being migrated or
+chowned by the upstream Hermes image.
+
+7. Verify container state and port bindings:
 
 ```powershell
 docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml --profile dashboard ps -a
@@ -128,16 +153,14 @@ docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose
 
 The dashboard `PORTS` column should show `127.0.0.1:9119->9119/tcp`.
 
-5. Verify that the dashboard exposes the Chat tab:
+8. Verify the gateway and, when the dashboard is running, the dashboard Chat
+   tab:
 
 ```powershell
-$response = Invoke-WebRequest -Uri "http://127.0.0.1:9119/" -UseBasicParsing
-if ($response.Content -notmatch 'window\.__HERMES_DASHBOARD_EMBEDDED_CHAT__=true') {
-    throw "Hermes dashboard Chat tab is not enabled."
-}
+powershell -NoProfile -ExecutionPolicy Bypass -File .\hermes-docker\scripts\Test-HermesDockerGateway.ps1 -Verbose
 ```
 
-6. Check recent logs if startup fails:
+9. Check recent logs if startup fails:
 
 ```powershell
 docker compose --env-file .\hermes-docker\.env -f .\hermes-docker\docker-compose.yml logs --tail 100 hermes-gateway
