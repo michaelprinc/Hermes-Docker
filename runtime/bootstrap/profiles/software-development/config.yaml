@@ -1,0 +1,53 @@
+model:
+  default: "qwen36_35b_a3b_mtp_iq3s_rx6800"
+  provider: "custom"
+  base_url: "http://host.docker.internal:8074/v1"
+  api_key: "local-model"
+
+terminal:
+  backend: "local"
+  cwd: "/workspace"
+  timeout: 180
+  docker_mount_cwd_to_workspace: false
+
+agent:
+  max_turns: 60
+  tool_use_enforcement:
+    - "codex"
+    - "gemma"
+
+streaming:
+  enabled: false
+
+platform_toolsets:
+  cli: [hermes-cli]
+  discord: [hermes-discord]
+
+discord:
+  require_mention: true
+  auto_thread: true
+  free_response_channels: ""
+
+mcp_servers:
+  pylance:
+    command: "/usr/bin/python3"
+    args:
+      - "/usr/local/lib/node_modules/pylance-mcp-server/server.py"
+    env:
+      WORKSPACE_ROOT: "/workspace"
+    tools:
+      resources: false
+      prompts: false
+  ps-quality:
+    command: "/usr/bin/python3"
+    args:
+      - "-I"
+      - "/workspace/mcp/ps-script-quality-server/server.py"
+    tools:
+      resources: false
+      prompts: false
+
+metadata:
+  docker_runtime:
+    discord_enabled: false
+    profile: "software-development"

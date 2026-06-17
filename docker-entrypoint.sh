@@ -29,6 +29,35 @@ copy_if_needed() {
   fi
 }
 
+copy_dir_if_needed() {
+  source_path="$1"
+  target_path="$2"
+
+  if [ ! -d "$source_path" ]; then
+    return 0
+  fi
+
+  if [ "$FORCE_BOOTSTRAP" = "true" ] || [ ! -d "$target_path" ]; then
+    mkdir -p "$target_path"
+    cp -R "$source_path"/. "$target_path"/
+  fi
+}
+
+copy_bootstrap_home() {
+  source_home="$1"
+  target_home="$2"
+
+  mkdir -p "$target_home/cron" "$target_home/hooks" "$target_home/logs" \
+    "$target_home/memories" "$target_home/sessions" "$target_home/skills" \
+    "$target_home/skins"
+
+  copy_if_needed "$source_home/config.yaml" "$target_home/config.yaml"
+  copy_if_needed "$source_home/.env" "$target_home/.env"
+  copy_if_needed "$source_home/SOUL.md" "$target_home/SOUL.md"
+  copy_dir_if_needed "$source_home/skills" "$target_home/skills"
+  copy_dir_if_needed "$source_home/profiles" "$target_home/profiles"
+}
+
 run_hermes_update() {
   cd /opt/hermes
   export VIRTUAL_ENV=/opt/hermes/.venv
@@ -40,13 +69,12 @@ run_hermes_update() {
 mkdir -p "$TARGET_HOME"
 
 if [ -n "$BOOTSTRAP_HOME" ] && [ -d "$BOOTSTRAP_HOME" ]; then
-  mkdir -p "$TARGET_HOME/cron" "$TARGET_HOME/hooks" "$TARGET_HOME/logs" \
-    "$TARGET_HOME/memories" "$TARGET_HOME/sessions" "$TARGET_HOME/skills" \
-    "$TARGET_HOME/skins"
+  copy_bootstrap_home "$BOOTSTRAP_HOME" "$TARGET_HOME"
 
-  copy_if_needed "$BOOTSTRAP_HOME/config.yaml" "$TARGET_HOME/config.yaml"
-  copy_if_needed "$BOOTSTRAP_HOME/.env" "$TARGET_HOME/.env"
-  copy_if_needed "$BOOTSTRAP_HOME/SOUL.md" "$TARGET_HOME/SOUL.md"
+  # Some Hermes Desktop/TUI and legacy resume paths still inspect a nested
+  # .hermes home. Keep it aligned with the managed Docker home so stale custom
+  # provider metadata cannot shadow the current bootstrap config.
+  copy_bootstrap_home "$BOOTSTRAP_HOME" "$TARGET_HOME/.hermes"
 fi
 
 chown -R "$TARGET_UID:$TARGET_GID" "$TARGET_HOME"
