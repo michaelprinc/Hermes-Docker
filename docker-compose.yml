@@ -23,6 +23,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${HERMES_WORKSPACE_ROOT}:/workspace:rw
+      - ../../infra-local/llama-orchestrator:/workspace/infra-local/llama-orchestrator:rw
       - hermes_state:/opt/data:rw
     command:
       - gateway
@@ -55,6 +56,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${HERMES_WORKSPACE_ROOT}:/workspace:rw
+      - ../../infra-local/llama-orchestrator:/workspace/infra-local/llama-orchestrator:rw
       - hermes_state:/opt/data:rw
     command:
       - dashboard
