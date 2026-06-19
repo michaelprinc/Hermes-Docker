@@ -1,7 +1,7 @@
 model:
-  default: "qwen36_35b_a3b_mtp_iq3s_rx6800"
+  default: "qwen3-6-35b-a3b-mtp-gguf-iq3_s_kv_cache_8_0__5_1"
   provider: "custom"
-  base_url: "http://host.docker.internal:8074/v1"
+  base_url: "http://host.docker.internal:8075/v1"
   api_key: "local-model"
 
 terminal:
@@ -51,3 +51,6 @@ metadata:
   docker_runtime:
     discord_enabled: false
     profile: "software-development"
+
+
+

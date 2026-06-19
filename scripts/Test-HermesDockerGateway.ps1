@@ -61,6 +61,7 @@ try {
     }
 
     $baseArgs = @('compose', '--env-file', $composeEnvPath, '-f', $composePath)
+    $composeEnvValues = Read-HermesDockerEnvFile -Path $composeEnvPath
 
     if ($PSCmdlet.ShouldProcess($composePath, 'Run Docker Hermes gateway verification')) {
         $runningServices = & docker @baseArgs 'ps' '--status' 'running' '--services'
@@ -91,19 +92,76 @@ raise SystemExit(0 if 'DISCORD_BOT_TOKEN=' in lines else 1)
             throw 'Discord token placeholder is not disabled in the bootstrap env file.'
         }
 
-                & docker @baseArgs 'exec' '-T' 'hermes-gateway' 'python3' '-c' @"
+        $modelMode = if ($composeEnvValues.ContainsKey('HERMES_AGENT_MODEL_MODE')) { $composeEnvValues['HERMES_AGENT_MODEL_MODE'] } else { 'Local' }
+        $expectedProvider = switch ($modelMode) {
+            'Codex' { 'openai-codex' }
+            'Local' { 'custom' }
+            default { if ($composeEnvValues.ContainsKey('HERMES_MODEL_PROVIDER')) { $composeEnvValues['HERMES_MODEL_PROVIDER'] } else { 'auto' } }
+        }
+        $expectedModel = switch ($modelMode) {
+            'Codex' { if ($composeEnvValues.ContainsKey('HERMES_CODEX_MODEL')) { $composeEnvValues['HERMES_CODEX_MODEL'] } else { 'gpt-5.4' } }
+            'Local' { if ($composeEnvValues.ContainsKey('HERMES_LOCAL_MODEL_ID')) { $composeEnvValues['HERMES_LOCAL_MODEL_ID'] } else { 'qwen36_35b_a3b_mtp_iq3xxs_rx6800_cache_mtp_256k' } }
+            default { if ($composeEnvValues.ContainsKey('HERMES_MODEL_DEFAULT')) { $composeEnvValues['HERMES_MODEL_DEFAULT'] } else { 'gpt-5.4' } }
+        }
+        $expectedBaseUrl = switch ($modelMode) {
+            'Codex' { '' }
+            'Local' { if ($composeEnvValues.ContainsKey('HERMES_LOCAL_MODEL_BASE_URL')) { $composeEnvValues['HERMES_LOCAL_MODEL_BASE_URL'] } else { 'http://host.docker.internal:8068/v1' } }
+            default { if ($composeEnvValues.ContainsKey('HERMES_MODEL_BASE_URL')) { $composeEnvValues['HERMES_MODEL_BASE_URL'] } else { '' } }
+        }
+        $expectedProfile = if ($composeEnvValues.ContainsKey('HERMES_PROFILE_NAME')) { $composeEnvValues['HERMES_PROFILE_NAME'] } else { 'software-development' }
+
+                & docker @baseArgs 'exec' '-T' `
+            '-e' "EXPECTED_PROVIDER=$expectedProvider" `
+            '-e' "EXPECTED_MODEL=$expectedModel" `
+            '-e' "EXPECTED_BASE_URL=$expectedBaseUrl" `
+            '-e' "EXPECTED_PROFILE=$expectedProfile" `
+            'hermes-gateway' 'python3' '-c' @"
 from pathlib import Path
 import os
+import re
 
-mode = os.environ.get('HERMES_DOCKER_MODEL_MODE', 'Configured')
-config_text = Path('/opt/data/config.yaml').read_text(encoding='utf-8-sig')
+def read_model_values(path):
+    lines = Path(path).read_text(encoding='utf-8-sig').splitlines()
+    model_lines = []
+    in_model = False
 
-if mode == 'Codex':
-        ok = 'provider: "openai-codex"' in config_text
-elif mode == 'Local':
-        ok = 'provider: "custom"' in config_text and 'base_url: "http://host.docker.internal:' in config_text
-else:
-        ok = 'provider: "' in config_text
+    for line in lines:
+        if line.strip() == 'model:':
+            in_model = True
+            continue
+        if in_model and line and not line.startswith((' ', '\t')):
+            break
+        if in_model:
+            model_lines.append(line)
+
+    values = {}
+    for line in model_lines:
+        match = re.match(r'^\s*([A-Za-z0-9_]+):\s*(.*?)\s*$', line)
+        if match:
+            value = match.group(2).strip()
+            if len(value) >= 2 and value[0] in "'\"" and value[-1] == value[0]:
+                value = value[1:-1]
+            values[match.group(1)] = value
+    return values
+
+expected = {
+    'provider': os.environ['EXPECTED_PROVIDER'],
+    'default': os.environ['EXPECTED_MODEL'],
+    'base_url': os.environ['EXPECTED_BASE_URL'],
+}
+
+paths = ['/opt/data/config.yaml']
+profile = os.environ.get('EXPECTED_PROFILE', '')
+if profile:
+    paths.append(f'/opt/data/profiles/{profile}/config.yaml')
+    paths.append(f'/opt/data/.hermes/profiles/{profile}/config.yaml')
+
+ok = True
+for path in paths:
+    values = read_model_values(path)
+    if not all(values.get(key) == value for key, value in expected.items()):
+        ok = False
+        break
 
 raise SystemExit(0 if ok else 1)
 "@
@@ -130,7 +188,6 @@ raise SystemExit(0 if ok else 1)
         }
 
         if ($runningServices -contains 'hermes-dashboard') {
-            $composeEnvValues = Read-HermesDockerEnvFile -Path $composeEnvPath
             $dashboardPort = if ($composeEnvValues.ContainsKey('HERMES_DASHBOARD_PORT')) { $composeEnvValues['HERMES_DASHBOARD_PORT'] } else { '9119' }
             $dashboardResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$dashboardPort/" -UseBasicParsing
             $dashboardChatFlagDetected = $dashboardResponse.Content -match 'window\.__HERMES_DASHBOARD_EMBEDDED_CHAT__=true'

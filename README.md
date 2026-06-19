@@ -217,6 +217,64 @@ Default local endpoint from Docker is `http://host.docker.internal:8068/v1`.
 The local server must expose an OpenAI-compatible API, including `/v1/models`
 and `/v1/chat/completions`.
 
+## Updating The Active Model Endpoint
+
+Hermes Docker has two configuration layers:
+
+- `hermes-docker/.env` is the operator-owned source for model settings.
+- `runtime/bootstrap/config.yaml` is generated from `.env`.
+- `runtime/bootstrap/profiles/<profile>/config.yaml` is the generated config
+  for the selected Hermes profile.
+- `/opt/data/config.yaml` is the live Hermes home inside the `hermes_state`
+  Docker volume.
+- `/opt/data/profiles/<profile>/config.yaml` is the live per-profile config
+  Hermes uses when a named profile is active.
+
+Running `Sync-HermesDockerConfig.ps1` without extra switches updates only the
+repository bootstrap files. A running container may keep using the old
+`/opt/data/config.yaml` until the bootstrap is applied to the container or the
+container is restarted. If Hermes is using a named profile, set
+`HERMES_PROFILE_NAME` so sync updates that profile too.
+
+Recommended procedure after changing `HERMES_LOCAL_MODEL_BASE_URL` or
+`HERMES_LOCAL_MODEL_ID` in `.env`:
+
+```powershell
+cd K:\Data_science_projects\WireGuard\agent-platforms
+
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\hermes-docker\scripts\Sync-HermesDockerConfig.ps1 `
+  -ApplyToRunningContainers `
+  -RestartContainers `
+  -Verbose
+
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\hermes-docker\scripts\Test-HermesDockerGateway.ps1 `
+  -Verbose
+```
+
+For a dry run before touching files or containers:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\hermes-docker\scripts\Sync-HermesDockerConfig.ps1 `
+  -ApplyToRunningContainers `
+  -RestartContainers `
+  -WhatIf `
+  -Verbose
+```
+
+Manual verification:
+
+```powershell
+docker compose --env-file .\hermes-docker\.env `
+  -f .\hermes-docker\docker-compose.yml `
+  exec -T hermes-gateway sh -lc 'grep -n "default:\|provider:\|base_url:" /opt/data/config.yaml /opt/data/profiles/software-development/config.yaml | head -20'
+```
+
+The `base_url` line must match `HERMES_LOCAL_MODEL_BASE_URL` from
+`hermes-docker/.env`, for example `http://host.docker.internal:8075/v1`.
+
 Example for the current local Qwen endpoint:
 
 ```powershell
